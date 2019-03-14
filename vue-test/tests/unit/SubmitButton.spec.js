@@ -1,48 +1,32 @@
 import { shallowMount } from "@vue/test-utils";
 import SubmitButton from "@/components/SubmitButton.vue";
 
+const msg = "送信する";
+const factory = propsData => {
+  return shallowMount(SubmitButton, {
+    propsData: {
+      msg,
+      ...propsData
+    }
+  });
+};
+
 describe("SubmitButton.vue", () => {
-  it("権限がない状態のメッセージを表示する", () => {
-    const msg = "送信する";
-    const wrapper = shallowMount(SubmitButton, {
-      propsData: {
-        msg
-      }
+  describe("管理者あり", () => {
+    it("メッセージを表示する", () => {
+      const wrapper = factory();
+
+      expect(wrapper.find("span").text()).toBe("権限がありません");
+      expect(wrapper.find("button").text()).toBe("送信する");
     });
-
-    console.log(wrapper.html());
-    // =>
-    // <div>
-    //   <span>権限がありません</span>
-    //   <button>
-    //     送信する
-    //   </button>
-    // </div>
-
-    expect(wrapper.find("span").text()).toBe("権限がありません");
-    expect(wrapper.find("button").text()).toBe("送信する");
   });
 
-  it("権限がある状態のメッセージを表示する", () => {
-    const msg = "送信する";
-    const isAdmin = true;
-    const wrapper = shallowMount(SubmitButton, {
-      propsData: {
-        msg,
-        isAdmin
-      }
+  describe("管理者なし", () => {
+    it("メッセージを表示する", () => {
+      const wrapper = factory({ isAdmin: true });
+
+      expect(wrapper.find("span").text()).toBe("管理者権限を実行する");
+      expect(wrapper.find("button").text()).toBe("送信する");
     });
-
-    console.log(wrapper.html());
-    // =>
-    // <div>
-    //   <span>管理者権限を実行する</span>
-    //   <button>
-    //     送信する
-    //   </button>
-    // </div>
-
-    expect(wrapper.find("span").text()).toBe("管理者権限を実行する");
-    expect(wrapper.find("button").text()).toBe("送信する");
   });
 });
