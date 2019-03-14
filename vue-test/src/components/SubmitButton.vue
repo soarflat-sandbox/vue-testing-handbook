@@ -9,7 +9,6 @@
 </template>
 
 <script>
-// greeting の値を render するだけのコンポーネント
 export default {
   name: "SubmitButton",
 

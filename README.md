@@ -20,3 +20,55 @@ const wrapper = shallowMount(Foo, {
   }
 })
 ```
+
+例えば以下のような`props`を受け取るコンポーネント場合
+
+```html
+<template>
+  <div>
+    <span v-if="isAdmin">管理者権限を実行する</span>
+    <span v-else>権限がありません</span>
+    <button>
+      {{ msg }}
+    </button>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "SubmitButton",
+
+  props: {
+    msg: {
+      type: String,
+      required: true
+    },
+    isAdmin: {
+      type: Boolean,
+      default: false
+    }
+  }
+};
+</script>
+```
+
+以下のように`propsData`を定義することにより、テストができる。
+
+```js
+import { shallowMount } from '@vue/test-utils'
+import SubmitButton from '@/components/SubmitButton.vue'
+
+describe('SubmitButton.vue', () => {
+  it('権限がない状態のメッセージを表示する', () => {
+    const msg = "送信する"
+    const wrapper = shallowMount(SubmitButton,{
+      propsData: {
+        msg: msg
+      }
+    })
+
+    expect(wrapper.find("span").text()).toBe("権限がありません")
+    expect(wrapper.find("button").text()).toBe("送信する")
+  })
+})
+```
