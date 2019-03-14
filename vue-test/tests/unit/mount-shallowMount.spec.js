@@ -9,12 +9,6 @@ describe("mount shallowMount のチェック（問答無用でテストは通る
       template: "<div>Child component</div>"
     });
 
-    const Parent = Vue.component("Parent", {
-      name: "Parent",
-
-      template: "<div><child /></div>"
-    });
-
     const shallowWrapper = shallowMount(Child);
     const mountWrapper = mount(Child);
 
