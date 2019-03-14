@@ -152,3 +152,213 @@ describe('NumberRenderer.vue', () => {
 > - `this`を細かく設定したい場合
 >
 > もちろんコンポーネントが正しくレンダーするテストも必要です。テストしたいことに合わせてもっとも適切なテクニックを選んで、エッジケースをちゃんとテストします。
+
+## イベントをシミュレーションしてテストをする
+
+ユーザー操作などにより発生するイベントをシミュレーションし、イベント発生後の状態のテストをする。
+
+以下はフォームをサブミットすると、メッセージが表示されるコンポーネント。
+
+```html
+<template>
+  <div>
+    <form @submit.prevent="handleSubmit">
+      <input v-model="username" data-username />
+      <input type="submit" />
+    </form>
+
+    <div class="message" v-show="submitted">
+      {{ username }}さん、お問い合わせ、ありがとうございます。
+    </div>
+  </div>
+</template>
+
+<script>
+  export default {
+    name: 'FormSubmitter',
+
+    data() {
+      return {
+        username: '',
+        submitted: false
+      };
+    },
+
+    methods: {
+      handleSubmit() {
+        this.submitted = true;
+      }
+    }
+  };
+</script>
+```
+
+以下のようにすれば、サブミットイベントがシミュレートでき、テストができる。
+
+```js
+import { shallowMount } from '@vue/test-utils';
+import FormSubmitter from '@/components/FormSubmitter.vue';
+
+describe('FormSubmitter.vue', () => {
+  it('フォームを更新するとお知らせを表示', () => {
+    // 1. arrange (初期設定) - テストの準備。この場合、コンポーネントをレンダーします
+    const wrapper = shallowMount(FormSubmitter);
+
+    // 2. act (実行) - システムを実行します。
+    wrapper.find('[data-username]').setValue('alice');
+    wrapper.find('form').trigger('submit.prevent');
+
+    // 3. assert (検証）- 期待と検証を比べます。
+    expect(wrapper.find('.message').text()).toBe(
+      'aliceさん、お問い合わせ、ありがとうございます。'
+    );
+  });
+});
+```
+
+### HTTP リクエスト(AJAX コール)をモックに置き換える
+
+Vue.js では`axios`を`Vue.prototype.$http`のエイリアスにすることがよくあり、以下のように利用されていることが多い。
+
+```js
+handleSubmitAsync() {
+  return this.$http.get("/api/v1/register", { username: this.username })
+    .then(() => {
+      // メッセージを表示するなど
+    })
+    .catch(() => {
+      // エラーをハンドル
+    })
+}
+```
+
+もし、`this.$http`をモックにしたら、実際に通信をおこわなくても上記のコードを簡単にテストできる。
+
+`http.get`のモックは以下のように実装できる。
+
+```js
+let url = '';
+let data = '';
+
+const mockHttp = {
+  get: (_url, _data) => {
+    return new Promise((resolve, reject) => {
+      url = _url;
+      data = _data;
+      resolve();
+    });
+  }
+};
+```
+
+上記のモックを利用するためには、以下のように`mocks`オプションを指定する必要がある。
+
+非同期処理なので、`describe`のコールバック関数に`async`をつけて`await flushPromises()`を実行しないと、非同期処理の完了前にアサートが実行され、テストが失敗する。
+
+```js
+import flushPromises from 'flush-promises';
+import { shallowMount } from '@vue/test-utils';
+import FormSubmitter from '@/components/FormSubmitter.vue';
+
+let url = '';
+let data = '';
+
+const mockHttp = {
+  get: (_url, _data) => {
+    return new Promise(resolve => {
+      url = _url;
+      data = _data;
+      resolve();
+    });
+  }
+};
+
+describe('FormSubmitter.vue', () => {
+  it('フォームを更新するとお知らせを表示', () => {
+    // 1. arrange (初期設定) - テストの準備。この場合、コンポーネントをレンダーします
+    const wrapper = shallowMount(FormSubmitter);
+
+    // 2. act (実行) - システムを実行します。
+    wrapper.find('[data-username]').setValue('alice');
+    wrapper.find('form').trigger('submit.prevent');
+
+    // 3. assert (検証）- 期待と検証を比べます。
+    expect(wrapper.find('.message').text()).toBe(
+      'aliceさん、お問い合わせ、ありがとうございます。'
+    );
+  });
+
+  it('フォームを更新するとお知らせを表示（非同期）', async () => {
+    const wrapper = shallowMount(FormSubmitter, {
+      data() {
+        return {
+          asyncTest: true
+        };
+      },
+      mocks: {
+        $http: mockHttp
+      }
+    });
+
+    wrapper.find('[data-username]').setValue('alice');
+    wrapper.find('form').trigger('submit.prevent');
+
+    await flushPromises();
+
+    expect(wrapper.find('.message').text()).toBe(
+      'aliceさん、お問い合わせ、ありがとうございます。'
+    );
+    expect(url).toBe('/api/v1/register');
+    expect(data).toEqual({ username: 'alice' });
+  });
+});
+```
+
+上記のテストが動くコンポーネントは以下の通り。
+
+```html
+<template>
+  <div>
+    <form @submit.prevent="handleSubmitAsync" v-if="asyncTest">
+      <input v-model="username" data-username />
+      <input type="submit" />
+    </form>
+    <form @submit.prevent="handleSubmit" v-else>
+      <input v-model="username" data-username />
+      <input type="submit" />
+    </form>
+
+    <div class="message" v-if="submitted">
+      {{ username }}さん、お問い合わせ、ありがとうございます。
+    </div>
+  </div>
+</template>
+
+<script>
+  export default {
+    name: 'FormSubmitter',
+    data() {
+      return {
+        username: '',
+        submitted: false,
+        asyncTest: false
+      };
+    },
+    methods: {
+      handleSubmit() {
+        this.submitted = true;
+      },
+      handleSubmitAsync() {
+        return this.$http
+          .get('/api/v1/register', { username: this.username })
+          .then(() => {
+            this.submitted = true;
+          })
+          .catch(e => {
+            throw Error('Something went wrong', e);
+          });
+      }
+    }
+  };
+</script>
+```

@@ -2,5 +2,8 @@
   "name": "vue-test",
   "version": "1.0.0",
   "main": "index.js",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "flush-promises": "^1.0.2"
+  }
 }
