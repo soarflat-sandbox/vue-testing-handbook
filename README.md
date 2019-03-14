@@ -398,3 +398,161 @@ describe('SET_POST', () => {
   });
 });
 ```
+
+## Vuex - アクションのテスト
+
+ミューテションと同様で、単独のアクションのテストも容易にできる。
+
+まずは以下のアクションを作成してみる。
+
+1. API を非同期呼び出しをする
+2. データに対して何らかの処理を行う
+3. ペイロードとして結果を使ってミューテーションをコミットする
+
+`authenticate`アクションでユーザー名とパスワードを外部 API に送信し、それらが一致するかどうかを確認する。
+
+結果は`SET_AUTHENTICATED`ペイロードとしてミューテーションをコミットする。
+
+```js
+import axios from 'axios';
+
+export default {
+  async authenticate({ commit }, { username, password }) {
+    const authenticated = await axios.post('/api/authenticate', {
+      username,
+      password
+    });
+
+    commit('set_authenticated', authenticated);
+  }
+};
+```
+
+このアクションに対しては以下のテストをする。
+
+1. 正しい API エンドポイントが使用されたかどうか
+2. ペイロードは正しいか
+3. 正しいミューテーションがコミットされた
+
+```js
+describe('authenticate', () => {
+  it('authenticated a user', async () => {
+    const commit = jest.fn();
+    const username = 'alice';
+    const password = 'password';
+
+    await actions.authenticate({ commit }, { username, password });
+
+    expect(url).toBe('/api/authenticate');
+    expect(body).toEqual({ username, password });
+    expect(commit).toHaveBeenCalledWith('SET_AUTHENTICATED', true);
+  });
+});
+```
+
+上記のテストは、そもそもリクエストするサーバすら存在しない状況のため失敗する。
+
+Jest の`jest.mock`を利用して、API 呼び出しをモックに置き換える。
+
+`axios`のモックは以下のように実装できる。API 呼び出しをシミュレートし、Promise を即時に resolve する。
+
+```js
+let url = '';
+let body = {};
+
+jest.mock('axios', () => ({
+  post: (_url, _body) => {
+    return new Promise(resolve => {
+      url = _url;
+      body = _body;
+      resolve(true);
+    });
+  }
+}));
+```
+
+そのため、以下のようにすればテストは成功する。
+
+```js
+import actions from '@/store/actions.js';
+
+let url = '';
+let body = {};
+
+jest.mock('axios', () => ({
+  post: (_url, _body) => {
+    return new Promise(resolve => {
+      url = _url;
+      body = _body;
+      resolve(true);
+    });
+  }
+}));
+
+describe('authenticate', () => {
+  it('authenticated a user', async () => {
+    const commit = jest.fn();
+    const username = 'alice';
+    const password = 'password';
+
+    await actions.authenticate({ commit }, { username, password });
+
+    expect(url).toBe('/api/authenticate');
+    expect(body).toEqual({ username, password });
+    expect(commit).toHaveBeenCalledWith('SET_AUTHENTICATED', true);
+  });
+});
+```
+
+### API エラーのテスト
+
+上記は API 呼び出しが成功した場合のみのテストだが、エラーが発生した場合のテストも追加する。
+
+```js
+it('catches an error', async () => {
+  mockError = true;
+
+  await expect(actions.authenticate({ commit: jest.fn() }, {})).rejects.toThrow(
+    'API Error occurred.'
+  );
+});
+```
+
+モックにエラーをスローさせるためには、以下のように変更をする。
+
+```js
+let url = '';
+let body = {};
+let mockError = false;
+
+jest.mock('axios', () => ({
+  post: (_url, _body) => {
+    return new Promise(resolve => {
+      if (mockError) throw Error();
+
+      url = _url;
+      body = _body;
+      resolve(true);
+    });
+  }
+}));
+```
+
+上記の変更に併せて、アクションが予期しているエラーをスローするように変更する。
+
+```js
+export default {
+  async authenticate({ commit }, { username, password }) {
+    try {
+      const authenticated = await axios.post('/api/authenticate', {
+        username,
+        password
+      });
+
+      commit('SET_AUTHENTICATED', authenticated);
+    } catch (e) {
+      throw Error('API Error occurred.');
+    }
+  }
+};
+```
