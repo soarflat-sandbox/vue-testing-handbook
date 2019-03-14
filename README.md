@@ -362,3 +362,5 @@ describe('FormSubmitter.vue', () => {
   };
 </script>
 ```
+
+## 発生したイベントのテスト
